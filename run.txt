@@ -1,0 +1,18 @@
+build_lexicon
+
+python3 build_auto_polarity_lexicon.py \
+    ~/leti/other/fuzzy_reviews/data/rureviews_reviews.txt \
+    --json-out rureviews_lexicon.json \
+    --csv-out rureviews_lexicon.csv \
+    --csv-sort-by polarity_abs \
+    --min-freq 20
+
+=================================
+
+extract_features.py
+
+python3 extract_features.py \
+  --reviews-txt ../data/rureviews_reviews.txt \
+  --lexicon-json ../build_lexicon/rureviews_lexicon.json \
+  --modifiers-yaml modifiers_ru.yml \
+  --out features.jsonl
