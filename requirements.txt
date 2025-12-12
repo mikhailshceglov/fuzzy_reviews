@@ -1,0 +1,9 @@
+transformers
+torch
+tqdm
+numpy
+pandas
+pymorphy2
+razdel
+pyyaml
+
