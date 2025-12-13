@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 """
 Этап 2: NLP-обработка отзывов -> числовые признаки.
@@ -13,6 +15,10 @@
 Признаки (минимум):
   pos, neg, score_crisp, intensity, tokens_alpha, lex_hits, coverage,
   intensifiers_count, downtoners_count, hedges_count, negations_count, contrast_count
+
+Добавлено (по ТЗ):
+  - emotion_intensity_crisp
+  - emotion_intensity_score (пока = emotion_intensity_crisp)
 """
 
 from __future__ import annotations
@@ -31,12 +37,17 @@ from typing import Dict, Iterable, List, Optional, Tuple, Any
 # ----------------------------
 _HAS_PYMORPHY2 = False
 _HAS_RAZDEL = False
+_HAS_PYMORPHY = False
 
 try:
-    import pymorphy2  # type: ignore
-    _HAS_PYMORPHY2 = True
+    import pymorphy3 as pymorphy  # type: ignore
+    _HAS_PYMORPHY = True
 except Exception:
-    _HAS_PYMORPHY2 = False
+    try:
+        import pymorphy2 as pymorphy  # type: ignore
+        _HAS_PYMORPHY = True
+    except Exception:
+        _HAS_PYMORPHY = False
 
 try:
     from razdel import tokenize as razdel_tokenize  # type: ignore
@@ -68,13 +79,17 @@ def tokenize(text: str) -> List[str]:
     text = normalize_text(text)
     if _HAS_RAZDEL:
         # razdel отдаёт токены с .text
-        return [t.text.lower() for t in razdel_tokenize(text) if WORD_RE.fullmatch(t.text.lower() or "")]  # type: ignore
+        return [
+            t.text.lower()
+            for t in razdel_tokenize(text)
+            if WORD_RE.fullmatch(t.text.lower() or "")
+        ]  # type: ignore
     return simple_tokenize(text)
 
 
 class Lemmatizer:
     def __init__(self) -> None:
-        self.morph = pymorphy2.MorphAnalyzer() if _HAS_PYMORPHY2 else None  # type: ignore
+        self.morph = pymorphy.MorphAnalyzer() if _HAS_PYMORPHY else None  # type: ignore
 
     def lemma(self, token: str) -> str:
         if self.morph is None:
@@ -199,6 +214,7 @@ def load_lexicon_csv(path: Path) -> Tuple[Dict[str, float], Dict[str, int]]:
             return pol, freq
 
         fn = [x.strip().lower() for x in reader.fieldnames]
+
         # маппинг "примерно"
         def pick(*cands: str) -> Optional[str]:
             for c in cands:
@@ -242,6 +258,10 @@ class ReviewFeatures:
     neg: float
     score_crisp: float
     intensity: float
+
+    # NEW (по ТЗ): эмоц. интенсивность на основе |polarity_after_modifiers|
+    emotion_intensity_crisp: float
+    emotion_intensity_score: float
 
     tokens_alpha: int
     lex_hits: int
@@ -380,12 +400,21 @@ def extract_features_for_review(
     intensity = (abs_sum / hits) if hits > 0 else 0.0
     coverage = (hits / tokens_alpha) if tokens_alpha > 0 else 0.0
 
+    # NEW (по ТЗ):
+    # emotion_intensity_crisp = sum(abs(polarity_w_after_modifiers)) / (count_polar_words + 1)
+    emotion_intensity_crisp = abs_sum / (hits + 1.0)
+    # слегка увеличиваем интенсивность по числу усилителей
+    emotion_intensity_crisp = min(1.0, emotion_intensity_crisp * (1.0 + 0.1 * intensifiers_count))
+    emotion_intensity_score = emotion_intensity_crisp  # можно держать равным
+
     return ReviewFeatures(
         id=rid,
         pos=round(pos, 6),
         neg=round(neg, 6),
         score_crisp=round(score_crisp, 6),
         intensity=round(intensity, 6),
+        emotion_intensity_crisp=round(emotion_intensity_crisp, 6),
+        emotion_intensity_score=round(emotion_intensity_score, 6),
         tokens_alpha=int(tokens_alpha),
         lex_hits=int(hits),
         coverage=round(coverage, 6),
@@ -445,6 +474,9 @@ def main() -> None:
     out_path = args.out
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    first_example: Optional[ReviewFeatures] = None
+    first_review_text: Optional[str] = None
+
     with out_path.open("w", encoding="utf-8") as out_f:
         for i, review in enumerate(iter_reviews_lines(args.reviews_txt)):
             feats = extract_features_for_review(
@@ -457,13 +489,24 @@ def main() -> None:
             )
             out_f.write(json.dumps(asdict(feats), ensure_ascii=False) + "\n")
 
+            if first_example is None:
+                first_example = feats
+                first_review_text = review
+
     print(f"[OK] Saved: {out_path} (jsonl)")
     print(f"[INFO] lexicon size: {len(lex_polarity)}; modifiers groups: {list(mods.keys())}")
-    if not _HAS_PYMORPHY2:
-        print("[WARN] pymorphy2 not found -> lemmatization fallback = token itself. "
-              "Для совпадения с этапом 1 лучше поставить pymorphy2/использовать тот же код лемматизации.")
+
+    # Один тестовый пример в лог
+    if first_example is not None:
+        snippet = first_review_text or ""
+        if len(snippet) > 120:
+            snippet = snippet[:120] + "…"
+        print("[EXAMPLE] review:", snippet)
+        print("[EXAMPLE] features:", json.dumps(asdict(first_example), ensure_ascii=False))
+
+    if not _HAS_PYMORPHY:
+        print("[WARN] pymorphy (pymorphy3/pymorphy2) not found -> lemmatization fallback = token itself.")
 
 
 if __name__ == "__main__":
     main()
-
