@@ -16,3 +16,16 @@ python3 extract_features.py \
   --lexicon-json ../build_lexicon/rureviews_lexicon.json \
   --modifiers-yaml modifiers_ru.yml \
   --out features.jsonl
+
+===============================
+
+Один отзыв по id
+python3 -m fuzzy.run_stage3 \
+  --features feature_create/features.jsonl \
+  --id 0 \
+  --pretty \
+  --top-k-rules 5 \
+  --show-text
+
+Батч (все отзывы из fuzzy/final_metrics.jsonl)
+python3 -m fuzzy.run_stage3 --features feature_create/features.jsonl
