@@ -29,3 +29,15 @@ python3 -m fuzzy.run_stage3 \
 
 Батч (все отзывы из fuzzy/final_metrics.jsonl)
 python3 -m fuzzy.run_stage3 --features feature_create/features.jsonl
+
+===============================
+tests
+файл: tests/eval_lexicon_stability.py
+
+python3 tests/eval_lexicon_stability.py \
+  --reviews-txt data/rureviews_reviews.txt \
+  --repeats 5 \
+  --seed 42 \
+  --batch-size 512
+
+python3 tests/plot.py
