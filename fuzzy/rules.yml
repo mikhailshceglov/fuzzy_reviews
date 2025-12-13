@@ -1,0 +1,235 @@
+version: 1
+
+# Выходные переменные (термы — только текст, без числовых диапазонов)
+outputs:
+  final_tonality:
+    terms: [сильно_негативная, негативная, нейтральная, позитивная, сильно_позитивная]
+  trust:
+    terms: [низкое, среднее, высокое]
+  final_emotion_intensity:
+    terms: [низкая, средняя, высокая]
+  impression_strength:
+    terms: [низкая, средняя, высокая]
+
+rules:
+  # ─────────────────────────────────────────────────────────────
+  # TRUST / RELIABILITY (6 правил)
+  # ─────────────────────────────────────────────────────────────
+  - id: R01_trust_high__cov_high__hedges_low
+    if:
+      all:
+        - var: coverage
+          is: высокое
+        - var: hedges_rate
+          is: мало
+    then:
+      trust: высокое
+
+  - id: R02_trust_med__cov_high__hedges_med
+    if:
+      all:
+        - var: coverage
+          is: высокое
+        - var: hedges_rate
+          is: средне
+    then:
+      trust: среднее
+
+  - id: R03_trust_med__cov_med__hedges_low
+    if:
+      all:
+        - var: coverage
+          is: среднее
+        - var: hedges_rate
+          is: мало
+    then:
+      trust: среднее
+
+  - id: R04_trust_med__cov_med__hedges_med
+    if:
+      all:
+        - var: coverage
+          is: среднее
+        - var: hedges_rate
+          is: средне
+    then:
+      trust: среднее
+
+  - id: R05_trust_low__cov_low
+    if:
+      all:
+        - var: coverage
+          is: низкое
+    then:
+      trust: низкое
+
+  - id: R06_trust_low__hedges_high
+    if:
+      all:
+        - var: hedges_rate
+          is: много
+    then:
+      trust: низкое
+    weight: 1.1
+
+  # ─────────────────────────────────────────────────────────────
+  # FINAL TONALITY (8 правил)
+  # ─────────────────────────────────────────────────────────────
+  - id: R07_ton_strong_pos__score_strong_pos__cov_high__hedges_low
+    if:
+      all:
+        - var: score_crisp
+          is: сильно_позитивная
+        - var: coverage
+          is: высокое
+        - var: hedges_rate
+          is: мало
+    then:
+      final_tonality: сильно_позитивная
+
+  - id: R08_ton_pos__score_pos__cov_high__hedges_low
+    if:
+      all:
+        - var: score_crisp
+          is: позитивная
+        - var: coverage
+          is: высокое
+        - var: hedges_rate
+          is: мало
+    then:
+      final_tonality: позитивная
+
+  - id: R09_ton_to_neutral__score_pos__cov_low
+    if:
+      all:
+        - var: score_crisp
+          is: позитивная
+        - var: coverage
+          is: низкое
+    then:
+      final_tonality: нейтральная
+    weight: 1.0
+
+  - id: R10_ton_strong_neg__score_strong_neg__cov_high__hedges_low
+    if:
+      all:
+        - var: score_crisp
+          is: сильно_негативная
+        - var: coverage
+          is: высокое
+        - var: hedges_rate
+          is: мало
+    then:
+      final_tonality: сильно_негативная
+
+  - id: R11_ton_neg__score_neg__cov_high__hedges_low
+    if:
+      all:
+        - var: score_crisp
+          is: негативная
+        - var: coverage
+          is: высокое
+        - var: hedges_rate
+          is: мало
+    then:
+      final_tonality: негативная
+
+  - id: R12_ton_to_neutral__score_neg__cov_low
+    if:
+      all:
+        - var: score_crisp
+          is: негативная
+        - var: coverage
+          is: низкое
+    then:
+      final_tonality: нейтральная
+    weight: 1.0
+
+  - id: R13_ton_to_neutral__conflict_high__magnitude_high
+    if:
+      all:
+        - var: conflict
+          is: высокий
+        - var: magnitude
+          is: высокая
+    then:
+      final_tonality: нейтральная
+    weight: 0.9
+
+  - id: R14_ton_to_neutral__hedges_high
+    if:
+      all:
+        - var: hedges_rate
+          is: много
+    then:
+      final_tonality: нейтральная
+    weight: 0.9
+
+  # ─────────────────────────────────────────────────────────────
+  # FINAL EMOTION INTENSITY (3 правила)
+  # ─────────────────────────────────────────────────────────────
+  - id: R15_int_high__emo_high__mag_high
+    if:
+      all:
+        - var: emotion_intensity_crisp
+          is: высокая
+        - var: magnitude
+          is: высокая
+    then:
+      final_emotion_intensity: высокая
+
+  - id: R16_int_med__emo_med
+    if:
+      all:
+        - var: emotion_intensity_crisp
+          is: средняя
+    then:
+      final_emotion_intensity: средняя
+
+  - id: R17_int_low__emo_low_or_mag_low
+    if:
+      any:
+        - var: emotion_intensity_crisp
+          is: низкая
+        - var: magnitude
+          is: низкая
+    then:
+      final_emotion_intensity: низкая
+    weight: 1.0
+
+  # ─────────────────────────────────────────────────────────────
+  # IMPRESSION STRENGTH (3 правила)
+  # ─────────────────────────────────────────────────────────────
+  - id: R18_impr_high__mag_high__conf_high
+    if:
+      all:
+        - var: magnitude
+          is: высокая
+        - var: conflict
+          is: высокий
+    then:
+      impression_strength: высокая
+
+  - id: R19_impr_med__mag_med
+    if:
+      all:
+        - var: magnitude
+          is: средняя
+    then:
+      impression_strength: средняя
+
+  - id: R20_impr_low__mag_low
+    if:
+      all:
+        - var: magnitude
+          is: низкая
+    then:
+      impression_strength: низкая
+
+# Дефолты (если по какому-то выходу почти ничего не активировалось)
+defaults:
+  final_tonality: нейтральная
+  trust: среднее
+  final_emotion_intensity: низкая
+  impression_strength: средняя
+
