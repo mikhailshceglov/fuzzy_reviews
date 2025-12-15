@@ -73,7 +73,7 @@ rules:
     weight: 1.1
 
   # ─────────────────────────────────────────────────────────────
-  # FINAL TONALITY (8 правил)
+  # FINAL TONALITY (обновлено: добавлены правила для cov=среднее/низкое)
   # ─────────────────────────────────────────────────────────────
   - id: R07_ton_strong_pos__score_strong_pos__cov_high__hedges_low
     if:
@@ -166,6 +166,101 @@ rules:
     weight: 0.9
 
   # ─────────────────────────────────────────────────────────────
+  # ДОБАВЛЕНО: покрываем "дырки", чтобы final_tonality не была ∅
+  # ─────────────────────────────────────────────────────────────
+
+  # score_crisp = нейтральная → всегда нейтральная (на любом coverage)
+  - id: R21_ton_neutral__score_neutral
+    if:
+      all:
+        - var: score_crisp
+          is: нейтральная
+    then:
+      final_tonality: нейтральная
+    weight: 1.0
+
+  # coverage = среднее: даём тональность напрямую от score_crisp (как и при high)
+  - id: R22_ton_strong_pos__score_strong_pos__cov_med__hedges_low
+    if:
+      all:
+        - var: score_crisp
+          is: сильно_позитивная
+        - var: coverage
+          is: среднее
+        - var: hedges_rate
+          is: мало
+    then:
+      final_tonality: сильно_позитивная
+    weight: 1.0
+
+  - id: R23_ton_pos__score_pos__cov_med__hedges_low
+    if:
+      all:
+        - var: score_crisp
+          is: позитивная
+        - var: coverage
+          is: среднее
+        - var: hedges_rate
+          is: мало
+    then:
+      final_tonality: позитивная
+    weight: 1.0
+
+  - id: R24_ton_strong_neg__score_strong_neg__cov_med__hedges_low
+    if:
+      all:
+        - var: score_crisp
+          is: сильно_негативная
+        - var: coverage
+          is: среднее
+        - var: hedges_rate
+          is: мало
+    then:
+      final_tonality: сильно_негативная
+    weight: 1.0
+
+  - id: R25_ton_neg__score_neg__cov_med__hedges_low
+    if:
+      all:
+        - var: score_crisp
+          is: негативная
+        - var: coverage
+          is: среднее
+        - var: hedges_rate
+          is: мало
+    then:
+      final_tonality: негативная
+    weight: 1.0
+
+  # coverage = низкое + сильно_*: раньше для сильно_негативной/сильно_позитивной правил не было → получалось ∅
+  # Здесь специально "смягчаем" сильную тональность до обычной при низком coverage.
+  - id: R26_ton_pos__score_strong_pos__cov_low__hedges_low
+    if:
+      all:
+        - var: score_crisp
+          is: сильно_позитивная
+        - var: coverage
+          is: низкое
+        - var: hedges_rate
+          is: мало
+    then:
+      final_tonality: позитивная
+    weight: 1.1
+
+  - id: R27_ton_neg__score_strong_neg__cov_low__hedges_low
+    if:
+      all:
+        - var: score_crisp
+          is: сильно_негативная
+        - var: coverage
+          is: низкое
+        - var: hedges_rate
+          is: мало
+    then:
+      final_tonality: негативная
+    weight: 1.1
+
+  # ─────────────────────────────────────────────────────────────
   # FINAL EMOTION INTENSITY (3 правила)
   # ─────────────────────────────────────────────────────────────
   - id: R15_int_high__emo_high__mag_high
@@ -232,4 +327,3 @@ defaults:
   trust: среднее
   final_emotion_intensity: низкая
   impression_strength: средняя
-

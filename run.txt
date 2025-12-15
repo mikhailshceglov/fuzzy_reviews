@@ -30,6 +30,24 @@ python3 -m fuzzy.run_stage3 \
 Батч (все отзывы из fuzzy/final_metrics.jsonl)
 python3 -m fuzzy.run_stage3 --features feature_create/features.jsonl
 
+---
+
+python3 feature_create/extract_features.py \
+  --reviews-txt my_reviews.txt \
+  --lexicon-json build_lexicon/rureviews_lexicon.json \
+  --modifiers-yaml feature_create/modifiers_ru.yml \
+  --out feature_create/my_features.jsonl
+
+
+python3 -m fuzzy.run_stage3 \
+  --features feature_create/my_features.jsonl \
+  --id 2 \
+  --pretty \
+  --top-k-rules 5 \
+  --show-text
+
+[ERROR] id=2 not found in feature_create/my_features.jsonl
+
 ===============================
 tests
 файл: tests/eval_lexicon_stability.py
