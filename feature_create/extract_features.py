@@ -29,6 +29,38 @@ except Exception:
 
 WORD_RE = re.compile(r"[а-яёa-z]+", re.IGNORECASE)
 
+# "ни-слова" (отрицательные местоимения/наречия), которые часто ломают логику,
+# если "не" размазывается по окну: "не понравилось ничего" и т.п.
+# Важно: pymorphy может лемматизировать "ничего" -> "ничто", поэтому держим и токены, и леммы.
+NI_TOKENS = {
+    "ничего",
+    "никого",
+    "никто",
+    "нигде",
+    "никуда",
+    "ниоткуда",
+    "никак",
+    "никогда",
+    "никакой",
+    "никакая",
+    "никакое",
+    "никакие",
+    "нисколько",
+    "нисколечко",
+}
+NI_LEMMAS = {
+    "ничто",
+    "никто",
+    "нигде",
+    "никуда",
+    "ниоткуда",
+    "никак",
+    "никогда",
+    "никакой",
+    "нисколько",
+    "нисколечко",
+}
+
 
 def normalize_text(s: str) -> str:
     return s.strip().lower()
@@ -271,22 +303,71 @@ def extract_features_for_review(
 
     tokens_alpha = sum(1 for t in collapsed_tokens if WORD_RE.fullmatch(t.replace("_", "")) is not None)
 
+    # ─────────────────────────────────────────────────────────────
+    # FIX: корректная обработка "НЕ"
+    # Идея:
+    #   - если встретили "не/нет/нельзя/ни" → ставим pending_neg (паритет) на window токенов вперёд;
+    #   - инвертируем ТОЛЬКО ближайшее следующее оценочное слово, затем pending_neg "сгорает";
+    #   - "ни-слова" (ничего/никто/...) не инвертируем от "не", и они сбрасывают pending_neg,
+    #     чтобы "не понравилось ничего" не давало ложный плюс.
+    # ─────────────────────────────────────────────────────────────
+    pending_neg_parity = 0  # 0/1: нужно ли инвертировать ближайшее оценочное слово
+    pending_neg_ttl = 0     # сколько ещё токенов держим pending_neg, если оценочное слово не встретилось
+
     for idx, lemma in enumerate(collapsed_lemmas):
+        tok = collapsed_tokens[idx]
+
+        # Контраст ("но/однако/...") обычно обрывает область отрицания
+        if tok in contrast:
+            pending_neg_parity = 0
+            pending_neg_ttl = 0
+            continue
+
+        # Частица отрицания: ставим pending_neg на ближайшее оценочное слово (паритетом)
+        if tok in negation:
+            # несколько отрицаний подряд: "не не X" -> паритет 0 (не инвертировать)
+            pending_neg_parity ^= 1
+            pending_neg_ttl = window
+            continue
+
+        # TTL: если отрицание "висит", но мы ушли слишком далеко — сбрасываем
+        if pending_neg_ttl > 0:
+            pending_neg_ttl -= 1
+            if pending_neg_ttl == 0:
+                pending_neg_parity = 0
+
+        # Защита от "ни-слов": не инвертировать, и сбросить pending_neg,
+        # чтобы "не ... ничего" не размазывалось.
+        if (tok in NI_TOKENS) or (lemma in NI_LEMMAS):
+            if pending_neg_parity:
+                pending_neg_parity = 0
+                pending_neg_ttl = 0
+            # "ни-слово" само по себе может быть в лексиконе и иметь polarity — это ок,
+            # просто не применяем к нему инверсию от НЕ.
+            # (Если его нет в лексиконе — просто идём дальше как обычно.)
+            # Не делаем continue: вдруг оно есть в лексиконе.
+            pass
+
         base = lex_polarity.get(lemma)
         if base is None:
             continue
 
         left = collapsed_tokens[max(0, idx - window): idx]
 
-        is_negated = any(t in negation for t in left)
+        # Усилители/смягчители оставляем как было (окно слева)
         has_intens = any(t in intensifiers for t in left)
         has_down = any(t in downtoners for t in left)
 
         p = float(base)
 
-        if is_negated:
+        # Применяем НЕ только если оно pending и это не "ни-слово"
+        apply_neg = (pending_neg_parity == 1) and (tok not in NI_TOKENS) and (lemma not in NI_LEMMAS)
+        if apply_neg:
             p = -p
             p *= 0.9
+            # "НЕ" сгорело: действует только на ближайшее оценочное слово
+            pending_neg_parity = 0
+            pending_neg_ttl = 0
 
         if has_intens and has_down:
             p *= 1.0

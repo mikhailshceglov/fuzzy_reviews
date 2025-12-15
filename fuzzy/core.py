@@ -93,10 +93,23 @@ INPUT_MFS: Dict[str, Dict[str, Any]] = {
     },
     # Обрати внимание: имя переменной — emotion_intensity_crisp (как в правилах),
     # а значение мы берём из features с fallback-логикой.
+    #
+    # КАЛИБРОВКА ПОД ВАШ ДАТАСЕТ (n=90013):
+    #   q25 = 0.178880
+    #   q50 = 0.233782
+    #   q75 = 0.300396
+    #   q90 = 0.364716
+    #
+    # Раньше стояли "универсальные" границы 0.25/0.45/0.65..., из-за чего почти
+    # все значения попадали в "низкая" (μ≈1.0). Теперь термы подстроены под
+    # реальные квантили.
     "emotion_intensity_crisp": {
-        "низкая": Trapezoid(0.0, 0.0, 0.25, 0.45),
-        "средняя": Triangle(0.25, 0.55, 0.85),
-        "высокая": Trapezoid(0.65, 0.85, 1.0, 1.0),
+        # левое плечо до ~медианы
+        "низкая": Trapezoid(0.0, 0.0, 0.17888, 0.233782),
+        # середина: пик около q75, затухание к q90
+        "средняя": Triangle(0.17888, 0.300396, 0.364716),
+        # правое плечо от q75..q90 и выше
+        "высокая": Trapezoid(0.300396, 0.364716, 1.0, 1.0),
     },
 }
 
@@ -180,7 +193,9 @@ def fuzzify_variable(var_name: str, x: float) -> Dict[str, float]:
     return {term: mu(x, shape) for term, shape in mfs.items()}
 
 
-def fuzzify_review_inputs(features: Dict[str, Any]) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], Dict[str, float]]:
+def fuzzify_review_inputs(
+    features: Dict[str, Any]
+) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], Dict[str, float]]:
     """
     Returns:
       fuzzy_inputs: var -> {term: μ}
